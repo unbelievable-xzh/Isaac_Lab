@@ -41,8 +41,8 @@ class CatchCubeEnvCfg(CatchEnvCfg):
         self.actions.gripper_action = mdp.BinaryJointPositionActionCfg(
             asset_name="robot",
             joint_names=["PrismaticJoint.*"],
-            open_command_expr={"PrismaticJoint.*": -0.02},
-            close_command_expr={"PrismaticJoint.*": 0.02},
+            open_command_expr={"PrismaticJoint.*": 0.02},
+            close_command_expr={"PrismaticJoint.*": -0.02},
         )
 
         self.commands.object_pose.body_name = "link_6"
@@ -101,7 +101,23 @@ class CatchCubeEnvCfg(CatchEnvCfg):
                 ),
             ],
         )
-
+        marker_cfg_real = FRAME_MARKER_CFG.copy()
+        marker_cfg_real.markers["frame"].scale = (0.1, 0.1, 0.1)
+        marker_cfg_real.prim_path = "/Visuals/FrameTransformer"
+        self.scene.ee_frame_real = FrameTransformerCfg(
+            prim_path="{ENV_REGEX_NS}/Robot/h2017nomass/base_link",
+            debug_vis=False,
+            visualizer_cfg=marker_cfg,
+            target_frames=[
+                FrameTransformerCfg.FrameCfg(
+                    prim_path="{ENV_REGEX_NS}/Robot/h2017nomass/link_6",
+                    name="end_effector",
+                    offset=OffsetCfg(
+                        pos=[0.0, 0.0, 0.20],
+                    ),
+                ),
+            ],
+        )
 @configclass
 class CatchCubeEnvCfg_PLAY(CatchCubeEnvCfg):
     def __post_init__(self):
