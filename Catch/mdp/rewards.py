@@ -50,6 +50,8 @@ def object_ee_distance_real(
     std: float,
     object_cfg: SceneEntityCfg = SceneEntityCfg("object"),
     ee_frame_cfg: SceneEntityCfg = SceneEntityCfg("ee_frame_real"),
+    d_min=0.02,
+    d_max=0.12,
 ) -> torch.Tensor:
     """Reward the agent for reaching the object using tanh-kernel."""
     # extract the used quantities (to enable type-hinting)
@@ -60,9 +62,10 @@ def object_ee_distance_real(
     # End-effector position: (num_envs, 3)
     ee_w = ee_frame_real.data.target_pos_w[..., 0, :]
     # Distance of the end-effector to the object: (num_envs,)
-    object_ee_distance = torch.norm(cube_pos_w - ee_w, dim=1)
+    d = torch.norm(cube_pos_w - ee_w, dim=1)
+    r=(d_max-d)/(d_max-d_min + 1e-6)
 
-    return 1 - torch.tanh(object_ee_distance / std)
+    return torch.clamp(r,0.0,1.0)
 
 def grasp_object_orientation(
     env: ManagerBasedRLEnv, 

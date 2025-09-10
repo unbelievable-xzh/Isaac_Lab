@@ -140,7 +140,6 @@ class RewardsCfg:
     object_dropping = RewTerm(func=mdp.object_is_dropped, params={"minimal_height": 0.8}, weight=-15.0)
 ####
     approach_ee_real = RewTerm(func=mdp.object_ee_distance_real, weight=0.0,params={"std": 0.1 })
-    approach_ee_real_exactly = RewTerm(func=mdp.object_ee_distance_real, weight=0.0,params={"std": 0.03 })
 #============================================================√√√√√√√√√√√√√√√√√√√√√√
 @configclass
 class TerminationsCfg:
@@ -162,10 +161,10 @@ class CurriculumCfg:
 ###############阶段1：细化预抓取位置姿态
     ##初步稳定增加速度惩罚
     joint_vel = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -5e-1, "num_steps": 5000}
+        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -3e-1, "num_steps": 5000}
     )
     action_rate = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -5e-1, "num_steps": 5000}
+        func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -3e-1, "num_steps": 5000}
     )
     #增大靠近奖励
     approach_ee_modify = CurrTerm(
@@ -178,25 +177,22 @@ class CurriculumCfg:
 ###############阶段2：进入实际抓取
 ###删除eew奖励，改换为eew_real与obj_cube的距离差值（相对大权重），保持increaseorientation不变###
     approach_real = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "approach_ee_real", "weight": 3.5, "num_steps": 8000}
+        func=mdp.modify_reward_weight, params={"term_name": "approach_ee_real", "weight": 3.5, "num_steps": 10000}
     )
     decrease_approach_ee_modify = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "approach_ee_exactly", "weight": 1.5, "num_steps": 8000}
+        func=mdp.modify_reward_weight, params={"term_name": "approach_ee_exactly", "weight": 1.5, "num_steps": 10000}
     )
     turn_off_approach_ee = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "approach_ee", "weight": 0, "num_steps": 8000}
+        func=mdp.modify_reward_weight, params={"term_name": "approach_ee", "weight": 0, "num_steps": 10000}
     )
     turn_off_approach_ee_modify = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "approach_ee_exactly", "weight": 0, "num_steps": 10000}
+        func=mdp.modify_reward_weight, params={"term_name": "approach_ee_exactly", "weight": 0, "num_steps": 15000}
     )
     increase_approach_real = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "approach_ee_real", "weight": 5.5, "num_steps": 10000}
-    )
-    approach_real_exactly = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "approach_ee_real_exactly", "weight": 5.5, "num_steps": 13000}
+        func=mdp.modify_reward_weight, params={"term_name": "approach_ee_real", "weight": 5.5, "num_steps": 15000}
     )
     Lift_Object = CurrTerm(
-        func=mdp.modify_reward_weight,params={"term_name": "lifting_object", "weight": 18, "num_steps": 15000}
+        func=mdp.modify_reward_weight,params={"term_name": "lifting_object", "weight": 18, "num_steps": 30000}
     )
 ###############阶段3：追踪command的位置
 @configclass
