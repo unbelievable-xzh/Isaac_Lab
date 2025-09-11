@@ -117,29 +117,18 @@ class RewardsCfg:
     joint_vel   = RewTerm(func=mdp.joint_vel_l2,  weight=-3e-2, params={"asset_cfg": SceneEntityCfg("robot")})
     # 成功抬升奖励
     lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 1.3}, weight=12)
-    approach_ee = RewTerm(func=mdp.object_ee_distance, weight=3.5,params={"std": 1.2 })
-    approach_ee_exactly = RewTerm(func=mdp.object_ee_distance, weight=8,params={"std": 0.1 })
-    #抓取位姿准确
-    orentation_correct = RewTerm(
-        func=mdp.grasp_object_orientation, 
-        weight=-2.5,
-        params={"robot_cfg": SceneEntityCfg("robot", 
-                body_names="link_6"), 
-                "object_cfg": SceneEntityCfg("object"),
-                "std": 1
-                })
-    orentation_correct_exactly = RewTerm(
-        func=mdp.grasp_object_orientation, 
-        weight=0.0,
-        params={"robot_cfg": SceneEntityCfg("robot", 
-                body_names="link_6"), 
-                "object_cfg": SceneEntityCfg("object"),
-                "std": 0.4
-                })
+    ########末端接近物体##########
+    approach_ee = RewTerm(func=mdp.object_ee_distance, weight=2.0,params={"threshold": 0.3 })
+    orientation_correct = RewTerm(
+        func=mdp.grasp_object_orientation,
+        weight=0.5,
+    )
+    #########抓住物体##########
+    approach_gripper_handle = RewTerm(func=mdp.approach_gripper_handle, weight=5.0, params={"offset": MISSING})
+    align_grasp_around_handle = RewTerm(func=mdp.align_grasp_around_handle, weight=0.125)
+
     #掉落惩罚
     object_dropping = RewTerm(func=mdp.object_is_dropped, params={"minimal_height": 0.8}, weight=-15.0)
-####
-    approach_ee_real = RewTerm(func=mdp.object_ee_distance_real, weight=0.0,params={"std": 0.1 })
 #============================================================√√√√√√√√√√√√√√√√√√√√√√
 @configclass
 class TerminationsCfg:
@@ -154,7 +143,7 @@ class TerminationsCfg:
     #     params={"minimum_height": 0.05, "asset_cfg": SceneEntityCfg("object")},  # 目标物体是cube
     # )
 
-#============================================================√√√√√√√√√√√√√√√√√√√√√√
+# #============================================================√√√√√√√√√√√√√√√√√√√√√√
 @configclass
 class CurriculumCfg:
 ###############阶段0：关节速度以及加速度抑制，以及粗调抓取的位置与姿态
@@ -166,35 +155,35 @@ class CurriculumCfg:
     action_rate = CurrTerm(
         func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -3e-1, "num_steps": 5000}
     )
-    #增大靠近奖励
-    approach_ee_modify = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "approach_ee_exactly", "weight": 4.5, "num_steps": 5000}
-    )
-    #细化姿势调整
-    increase_orientation = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "orentation_correct_exactly", "weight": -4, "num_steps": 10000}
-    )
-###############阶段2：进入实际抓取
-###删除eew奖励，改换为eew_real与obj_cube的距离差值（相对大权重），保持increaseorientation不变###
-    approach_real = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "approach_ee_real", "weight": 3.5, "num_steps": 10000}
-    )
-    decrease_approach_ee_modify = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "approach_ee_exactly", "weight": 1.5, "num_steps": 10000}
-    )
-    turn_off_approach_ee = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "approach_ee", "weight": 0, "num_steps": 10000}
-    )
-    turn_off_approach_ee_modify = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "approach_ee_exactly", "weight": 0, "num_steps": 15000}
-    )
-    increase_approach_real = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "approach_ee_real", "weight": 5.5, "num_steps": 15000}
-    )
-    Lift_Object = CurrTerm(
-        func=mdp.modify_reward_weight,params={"term_name": "lifting_object", "weight": 18, "num_steps": 30000}
-    )
-###############阶段3：追踪command的位置
+#     #增大靠近奖励
+#     approach_ee_modify = CurrTerm(
+#         func=mdp.modify_reward_weight, params={"term_name": "approach_ee_exactly", "weight": 4.5, "num_steps": 5000}
+#     )
+#     #细化姿势调整
+#     increase_orientation = CurrTerm(
+#         func=mdp.modify_reward_weight, params={"term_name": "orentation_correct_exactly", "weight": -4, "num_steps": 10000}
+#     )
+# ###############阶段2：进入实际抓取
+# ###删除eew奖励，改换为eew_real与obj_cube的距离差值（相对大权重），保持increaseorientation不变###
+#     approach_real = CurrTerm(
+#         func=mdp.modify_reward_weight, params={"term_name": "approach_ee_real", "weight": 3.5, "num_steps": 10000}
+#     )
+#     decrease_approach_ee_modify = CurrTerm(
+#         func=mdp.modify_reward_weight, params={"term_name": "approach_ee_exactly", "weight": 1.5, "num_steps": 10000}
+#     )
+#     turn_off_approach_ee = CurrTerm(
+#         func=mdp.modify_reward_weight, params={"term_name": "approach_ee", "weight": 0, "num_steps": 10000}
+#     )
+#     turn_off_approach_ee_modify = CurrTerm(
+#         func=mdp.modify_reward_weight, params={"term_name": "approach_ee_exactly", "weight": 0, "num_steps": 15000}
+#     )
+#     increase_approach_real = CurrTerm(
+#         func=mdp.modify_reward_weight, params={"term_name": "approach_ee_real", "weight": 5.5, "num_steps": 15000}
+#     )
+#     Lift_Object = CurrTerm(
+#         func=mdp.modify_reward_weight,params={"term_name": "lifting_object", "weight": 18, "num_steps": 30000}
+#     )
+# ###############阶段3：追踪command的位置
 @configclass
 class CatchEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the lifting environment."""

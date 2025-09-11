@@ -101,19 +101,26 @@ class CatchCubeEnvCfg(CatchEnvCfg):
                 ),
             ],
         )
-        marker_cfg_real = FRAME_MARKER_CFG.copy()
-        marker_cfg_real.markers["frame"].scale = (0.1, 0.1, 0.1)
-        marker_cfg_real.prim_path = "/Visuals/FrameTransformer"
-        self.scene.ee_frame_real = FrameTransformerCfg(
-            prim_path="{ENV_REGEX_NS}/Robot/h2017nomass/base_link",
+        marker_cfg_handle = FRAME_MARKER_CFG.copy()
+        marker_cfg_handle.markers["frame"].scale = (0.1, 0.1, 0.1)
+        marker_cfg_handle.prim_path = "/Visuals/FrameTransformer"
+        self.scene.handle_frame = FrameTransformerCfg(
+            prim_path="{ENV_REGEX_NS}/Robot/Catch",
             debug_vis=False,
-            visualizer_cfg=marker_cfg,
+            visualizer_cfg=marker_cfg_handle,
             target_frames=[
                 FrameTransformerCfg.FrameCfg(
-                    prim_path="{ENV_REGEX_NS}/Robot/h2017nomass/link_6",
-                    name="end_effector",
+                    prim_path="{ENV_REGEX_NS}/Robot/Catch/link2",
+                    name="top_finger",
                     offset=OffsetCfg(
-                        pos=[0.0, 0.0, 0.20],
+                        pos=[0.0, 0.02, 0.0],
+                    ),
+                ),
+                FrameTransformerCfg.FrameCfg(
+                    prim_path="{ENV_REGEX_NS}/Robot/Catch/link5",
+                    name="low_finger",
+                    offset=OffsetCfg(
+                        pos=[0.0, -0.02, 0.0],
                     ),
                 ),
             ],
