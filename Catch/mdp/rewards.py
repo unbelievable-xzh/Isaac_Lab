@@ -47,19 +47,6 @@ def object_ee_distance(
     reward = torch.pow(reward, 2)
     return torch.where(distance <= threshold, 2 * reward, reward)
 
-# def grasp_object_orientation(
-#     env: ManagerBasedRLEnv,
-#     std:float,
-#     object_cfg: SceneEntityCfg = SceneEntityCfg("object"),
-#     robot_cfg: SceneEntityCfg = SceneEntityCfg("robot")
-# )-> torch.Tensor:
-#     # extract the asset (to enable type hinting)
-#     object: RigidObject = env.scene[object_cfg.name]
-#     robot: RigidObject = env.scene[robot_cfg.name]
-#     # obtain the desired and current orientations
-#     des_quat_w = object.data.body_quat_w[:, 0, :4]  # [num_envs, 4]
-#     curr_quat_w = robot.data.body_quat_w[:, 10,:4]
-#     obj_quat_mat  = matrix_from_quat(des_quat_w)
 
 def grasp_object_orientation(
     env: ManagerBasedRLEnv,
