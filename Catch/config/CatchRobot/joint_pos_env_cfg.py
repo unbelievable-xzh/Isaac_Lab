@@ -111,16 +111,30 @@ class CatchCubeEnvCfg(CatchEnvCfg):
             target_frames=[
                 FrameTransformerCfg.FrameCfg(
                     prim_path="{ENV_REGEX_NS}/Robot/Catch/link2",
-                    name="top_finger",
+                    name="finger_1",
                     offset=OffsetCfg(
-                        pos=[0.0, 0.02, 0.0],
+                        pos=[0.0, 0.0, 0.0],
+                    ),
+                ),
+                FrameTransformerCfg.FrameCfg(
+                    prim_path="{ENV_REGEX_NS}/Robot/Catch/link2",
+                    name="finger_3",
+                    offset=OffsetCfg(
+                        pos=[0.0, 0.0, 0.0],
+                    ),
+                ),
+                FrameTransformerCfg.FrameCfg(
+                    prim_path="{ENV_REGEX_NS}/Robot/Catch/link2",
+                    name="finger_4",
+                    offset=OffsetCfg(
+                        pos=[0.0, 0.0, 0.0],
                     ),
                 ),
                 FrameTransformerCfg.FrameCfg(
                     prim_path="{ENV_REGEX_NS}/Robot/Catch/link5",
-                    name="low_finger",
+                    name="finger_6",
                     offset=OffsetCfg(
-                        pos=[0.0, -0.02, 0.0],
+                        pos=[0.0, 0.0, 0.0],
                     ),
                 ),
             ],
