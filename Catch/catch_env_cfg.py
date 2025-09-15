@@ -20,6 +20,7 @@ from isaaclab.sensors.frame_transformer.frame_transformer_cfg import FrameTransf
 from isaaclab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg, UsdFileCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from sympy.physics.vector.printing import params
 
 from . import mdp
 
@@ -39,6 +40,7 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
     robot: ArticulationCfg = MISSING
     # end-effector sensor: will be populated by agent env cfg
     ee_frame: FrameTransformerCfg = MISSING
+    gripper_frame: FrameTransformerCfg = MISSING
     # target object: will be populated by agent env cfg
     object: RigidObjectCfg | DeformableObjectCfg = MISSING
     
@@ -115,17 +117,21 @@ class EventCfg:
 class RewardsCfg:
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-3e-2)
     joint_vel   = RewTerm(func=mdp.joint_vel_l2,  weight=-3e-2, params={"asset_cfg": SceneEntityCfg("robot")})
-    # 成功抬升奖励
-    lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 1.3}, weight=12)
     ########末端接近物体##########
-    approach_ee = RewTerm(func=mdp.object_ee_distance, weight=2.0,params={"threshold": 0.3 })
-    orientation_correct = RewTerm(
-        func=mdp.grasp_object_orientation,
-        weight=0.5,
-    )
+    approach_ee_object = RewTerm(func=mdp.object_ee_distance, weight=2.0,params={"threshold": 0.3 })
+    orientation_correct = RewTerm(func=mdp.grasp_object_orientation, weight=0.5,params={"std": 0.3 })
     #########抓住物体##########
-    approach_gripper_handle = RewTerm(func=mdp.approach_gripper_handle, weight=5.0, params={"offset": MISSING})
-    align_grasp_around_handle = RewTerm(func=mdp.align_grasp_around_handle, weight=0.125)
+    approach_gripper_handle = RewTerm(func=mdp.approach_gripper_object, weight=5.0, params={"offset": MISSING})
+    align_grasp_around_handle = RewTerm(func=mdp.align_gripper_around_object, weight=0.125)
+    grasp_handle = RewTerm(
+        func=mdp.grasp_object,
+        weight=0.5,
+        params={
+            "threshold": 0.03,
+            "open_joint_pos": MISSING,
+            "asset_cfg": SceneEntityCfg("robot", joint_names=MISSING),
+        },
+    )
 
     #掉落惩罚
     object_dropping = RewTerm(func=mdp.object_is_dropped, params={"minimal_height": 0.8}, weight=-15.0)
