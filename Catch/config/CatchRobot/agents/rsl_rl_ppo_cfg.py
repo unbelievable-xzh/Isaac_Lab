@@ -9,7 +9,7 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 @configclass
 class CatchCubePPORunnerCfg(RslRlOnPolicyRunnerCfg):
     # rollout 更长一点
-    num_steps_per_env = 24          # 从 24 -> 64
+    num_steps_per_env = 24         # 从 24 -> 64
     max_iterations = 1500           # 先不改；是否增加看你要的总步数
     save_interval = 50
     experiment_name = "catch_cube"

@@ -20,7 +20,10 @@ from isaaclab.sensors.frame_transformer.frame_transformer_cfg import FrameTransf
 from isaaclab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg, UsdFileCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from sympy.physics.vector.printing import params
+from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
+from isaaclab.assets import RigidObjectCfg
+import isaaclab.sim as sim_utils
+
 
 from . import mdp
 
@@ -40,6 +43,7 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
     robot: ArticulationCfg = MISSING
     # end-effector sensor: will be populated by agent env cfg
     ee_frame: FrameTransformerCfg = MISSING
+    object_frame: FrameTransformerCfg = MISSING
     gripper_frame: FrameTransformerCfg = MISSING
     # target object: will be populated by agent env cfg
     object: RigidObjectCfg | DeformableObjectCfg = MISSING
@@ -58,11 +62,9 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
     
     table = AssetBaseCfg(
         prim_path="{ENV_REGEX_NS}/table",
-        spawn=sim_utils.UsdFileCfg(usd_path="/home/digitaltwins/Project/5GSwarmRobot/V2025_4/AirSimDigitalTwins-/Model/Catch_scene/object2_1_copy.usd", scale=(0.01, 0.01, 0.01)),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(-1.9, 0.0, 0.0)),
+        spawn=sim_utils.UsdFileCfg(usd_path="/home/xzh/Downloads/AirSimDigitalTwins-/Model/robotmeta/object2_1.usd", scale=(0.01, 0.01, 0.01)),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(-2.0, 0.0, 0.0)),
     )
-
-
 ##
 # MDP settings
 ##
@@ -96,13 +98,14 @@ class ObservationsCfg:
         #机器人关节位置+角速度
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel)
-        #目标物体相对于机器人坐标系下
+        #目标物体相对于机器人坐标系下先
         object_pose = ObsTerm(func=mdp.object_position_in_robot_root_frame_pos)
         object_quat = ObsTerm(func=mdp.object_position_in_robot_root_frame_quat)
+        # #目标物体与末端距离
+        # object_gripper_distance = ObsTerm(func=mdp.object_gripper_distance)
         #command中的目标位姿
         # target_object_pos = ObsTerm(func=mdp.generated_commands, params={"command_name": "object_pose"})
         actions = ObsTerm(func=mdp.last_action)
-
         def __post_init__(self):
             self.enable_corruption = True
             self.concatenate_terms = True
@@ -115,26 +118,26 @@ class EventCfg:
 #============================================================√√√√√√√√√√√√√√√√√√√√√√
 @configclass
 class RewardsCfg:
-    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-3e-2)
-    joint_vel   = RewTerm(func=mdp.joint_vel_l2,  weight=-3e-2, params={"asset_cfg": SceneEntityCfg("robot")})
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-3e-3)
+    joint_vel   = RewTerm(func=mdp.joint_vel_l2,  weight=-3e-3, params={"asset_cfg": SceneEntityCfg("robot")})
     ########末端接近物体##########
-    approach_ee_object = RewTerm(func=mdp.object_ee_distance, weight=2.0,params={"threshold": 0.3 })
-    orientation_correct = RewTerm(func=mdp.grasp_object_orientation, weight=0.5,params={"std": 0.3 })
+    approach_ee_object = RewTerm(func=mdp.object_ee_distance, weight=2.0,params={"threshold": 0.5 })
+    orientation_correct = RewTerm(func=mdp.align_ee_object, weight=0.5)
     #########抓住物体##########
-    approach_gripper_handle = RewTerm(func=mdp.approach_gripper_object, weight=5.0, params={"offset": MISSING})
-    align_grasp_around_handle = RewTerm(func=mdp.align_gripper_around_object, weight=0.125)
+    approach_gripper_handle = RewTerm(func=mdp.approach_gripper_object, weight=5.0, params={"offset": MISSING,"threshold": 0.01})
+    align_grasp_around_handle = RewTerm(func=mdp.align_gripper_around_object, weight=0.125,params={"threshold": 0.01})
     grasp_handle = RewTerm(
         func=mdp.grasp_object,
         weight=0.5,
         params={
-            "threshold": 0.03,
+            "threshold": 0.005,
             "open_joint_pos": MISSING,
             "asset_cfg": SceneEntityCfg("robot", joint_names=MISSING),
         },
     )
-
     #掉落惩罚
-    object_dropping = RewTerm(func=mdp.object_is_dropped, params={"minimal_height": 0.8}, weight=-15.0)
+    object_dropping = RewTerm(func=mdp.object_is_dropped, params={"minimal_height": 1.0}, weight=-10.0)
+
 #============================================================√√√√√√√√√√√√√√√√√√√√√√
 @configclass
 class TerminationsCfg:
@@ -143,53 +146,22 @@ class TerminationsCfg:
     # 任务超时终止条件
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
 
-    # # 物体掉落终止条件（如果物体低于最低高度，则任务终止）
-    # object_dropping = DoneTerm(
-    #     func=mdp.root_height_below_minimum,
-    #     params={"minimum_height": 0.05, "asset_cfg": SceneEntityCfg("object")},  # 目标物体是cube
-    # )
-
-# #============================================================√√√√√√√√√√√√√√√√√√√√√√
+#============================================================√√√√√√√√√√√√√√√√√√√√√√
 @configclass
 class CurriculumCfg:
-###############阶段0：关节速度以及加速度抑制，以及粗调抓取的位置与姿态
-###############阶段1：细化预抓取位置姿态
-    ##初步稳定增加速度惩罚
-    joint_vel = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -3e-1, "num_steps": 5000}
-    )
+#     #训练抓取
+#     # lift_object=CurrTerm(
+#     #     func=mdp.modify_reward_weight, params={"term_name": "lifting_object", "weight": 30.0, "num_steps": 10000}
+#     # )
     action_rate = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -3e-1, "num_steps": 5000}
+        func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -1e-2, "num_steps": 10000}
     )
-#     #增大靠近奖励
-#     approach_ee_modify = CurrTerm(
-#         func=mdp.modify_reward_weight, params={"term_name": "approach_ee_exactly", "weight": 4.5, "num_steps": 5000}
-#     )
-#     #细化姿势调整
-#     increase_orientation = CurrTerm(
-#         func=mdp.modify_reward_weight, params={"term_name": "orentation_correct_exactly", "weight": -4, "num_steps": 10000}
-#     )
-# ###############阶段2：进入实际抓取
-# ###删除eew奖励，改换为eew_real与obj_cube的距离差值（相对大权重），保持increaseorientation不变###
-#     approach_real = CurrTerm(
-#         func=mdp.modify_reward_weight, params={"term_name": "approach_ee_real", "weight": 3.5, "num_steps": 10000}
-#     )
-#     decrease_approach_ee_modify = CurrTerm(
-#         func=mdp.modify_reward_weight, params={"term_name": "approach_ee_exactly", "weight": 1.5, "num_steps": 10000}
-#     )
-#     turn_off_approach_ee = CurrTerm(
-#         func=mdp.modify_reward_weight, params={"term_name": "approach_ee", "weight": 0, "num_steps": 10000}
-#     )
-#     turn_off_approach_ee_modify = CurrTerm(
-#         func=mdp.modify_reward_weight, params={"term_name": "approach_ee_exactly", "weight": 0, "num_steps": 15000}
-#     )
-#     increase_approach_real = CurrTerm(
-#         func=mdp.modify_reward_weight, params={"term_name": "approach_ee_real", "weight": 5.5, "num_steps": 15000}
-#     )
-#     Lift_Object = CurrTerm(
-#         func=mdp.modify_reward_weight,params={"term_name": "lifting_object", "weight": 18, "num_steps": 30000}
-#     )
-# ###############阶段3：追踪command的位置
+
+    joint_vel = CurrTerm(
+        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -1e-2, "num_steps": 10000}
+    )
+
+
 @configclass
 class CatchEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the lifting environment."""

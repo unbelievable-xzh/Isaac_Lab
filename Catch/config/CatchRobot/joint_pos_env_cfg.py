@@ -40,16 +40,16 @@ class CatchCubeEnvCfg(CatchEnvCfg):
         )
         self.actions.gripper_action = mdp.BinaryJointPositionActionCfg(
             asset_name="robot",
-            joint_names=["PrismaticJoint.*"],
-            open_command_expr={"PrismaticJoint.*": 0.1},
-            close_command_expr={"PrismaticJoint.*": -0.1},
+            joint_names=["PrismaticJoint_1"],
+            open_command_expr={"PrismaticJoint_1": 0.12},
+            close_command_expr={"PrismaticJoint_1": -0.12},
         )
 
         self.commands.object_pose.body_name = "link_6"
 
         self.scene.object = RigidObjectCfg(
             prim_path="{ENV_REGEX_NS}/Object",
-            init_state=RigidObjectCfg.InitialStateCfg(pos=[-1.67, 0.0, 1.09], rot=[0.70711, 0.0, -0.70711, 0.0]),
+            init_state=RigidObjectCfg.InitialStateCfg(pos=[-1.77, 0.0, 1.06], rot=[0.70711, 0.0, -0.70711, 0.0]),
             spawn=sim_utils.CuboidCfg(
                 size=(0.01, 1.8, 0.05),  
                 rigid_props=RigidBodyPropertiesCfg(
@@ -78,7 +78,7 @@ class CatchCubeEnvCfg(CatchEnvCfg):
                     prim_path="{ENV_REGEX_NS}/Robot/h2017nomass/link_6",
                     name="end_effector",
                     offset=OffsetCfg(
-                        pos=[0.0, 0.0, 0.30],
+                        pos=[0.0, 0.0, 0.20],
                     ),
                 ),
             ],
@@ -105,44 +105,44 @@ class CatchCubeEnvCfg(CatchEnvCfg):
         marker_cfg_gripper.markers["frame"].scale = (0.1, 0.1, 0.1)
         marker_cfg_gripper.prim_path = "/Visuals/FrameTransformer"
         self.scene.gripper_frame = FrameTransformerCfg(
-            prim_path="{ENV_REGEX_NS}/Robot/Catch",
+            prim_path="{ENV_REGEX_NS}/Robot/catch/GeoContainer",
             debug_vis=False,
             visualizer_cfg=marker_cfg_gripper,
             target_frames=[
                 FrameTransformerCfg.FrameCfg(
-                    prim_path="{ENV_REGEX_NS}/Robot/Catch/link2",
+                    prim_path="{ENV_REGEX_NS}/Robot/catch/Link_2",
                     name="finger_1",
                     offset=OffsetCfg(
-                        pos=[0.0, 0.0, 0.0],
+                        pos=[0.01, 0.57, 0.075],
                     ),
                 ),
                 FrameTransformerCfg.FrameCfg(
-                    prim_path="{ENV_REGEX_NS}/Robot/Catch/link2",
+                    prim_path="{ENV_REGEX_NS}/Robot/catch/Link_3",
                     name="finger_3",
                     offset=OffsetCfg(
-                        pos=[0.0, 0.0, 0.0],
+                        pos=[0.01, 0.0, 0.075],
                     ),
                 ),
                 FrameTransformerCfg.FrameCfg(
-                    prim_path="{ENV_REGEX_NS}/Robot/Catch/link2",
+                    prim_path="{ENV_REGEX_NS}/Robot/catch/Link_5",
                     name="finger_4",
                     offset=OffsetCfg(
-                        pos=[0.0, 0.0, 0.0],
+                        pos=[-0.01, 0.57, 0.075],
                     ),
                 ),
                 FrameTransformerCfg.FrameCfg(
-                    prim_path="{ENV_REGEX_NS}/Robot/Catch/link5",
+                    prim_path="{ENV_REGEX_NS}/Robot/catch/Link_6",
                     name="finger_6",
                     offset=OffsetCfg(
-                        pos=[0.0, 0.0, 0.0],
+                        pos=[-0.01, 0.0, 0.075],
                     ),
                 ),
             ],
         )
         ########
         self.rewards.approach_gripper_handle.params["offset"] = 0.04
-        self.rewards.grasp_handle.params["open_joint_pos"] = 0.1
-        self.rewards.grasp_handle.params["asset_cfg"].joint_names = ["PrismaticJoint_.*"]
+        self.rewards.grasp_handle.params["open_joint_pos"] = -0.12
+        self.rewards.grasp_handle.params["asset_cfg"].joint_names = ["PrismaticJoint_1"]
 @configclass
 class CatchCubeEnvCfg_PLAY(CatchCubeEnvCfg):
     def __post_init__(self):
