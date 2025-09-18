@@ -62,7 +62,7 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
     
     table = AssetBaseCfg(
         prim_path="{ENV_REGEX_NS}/table",
-        spawn=sim_utils.UsdFileCfg(usd_path="/home/xzh/Downloads/AirSimDigitalTwins-/Model/robotmeta/object2_1.usd", scale=(0.01, 0.01, 0.01)),
+        spawn=sim_utils.UsdFileCfg(usd_path="/home/xzh/Downloads/AirSimDigitalTwins-/Model/CatchScene/object2_1.usd", scale=(0.01, 0.01, 0.01)),
         init_state=AssetBaseCfg.InitialStateCfg(pos=(-2.0, 0.0, 0.0)),
     )
 ##

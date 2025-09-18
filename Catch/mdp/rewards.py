@@ -62,33 +62,6 @@ def object_ee_distance(
     return torch.where(distance <= threshold, 2 * reward, reward)
 
 
-#modify the orientation of end_effort and object
-def grasp_object_orientation(
-        env: ManagerBasedRLEnv,
-        std: float,
-        object_frame_cfg: SceneEntityCfg = SceneEntityCfg("object_frame"),
-        gripper_frame_cfg: SceneEntityCfg = SceneEntityCfg("gripper_frame"),
-        finger_ids=(0, 1, 2, 3),
-) -> torch.Tensor:
-    # extract the asset (to enable type hinting)
-    object: FrameTransformer = env.scene[object_frame_cfg.name]
-    gripper: FrameTransformer = env.scene[gripper_frame_cfg.name]
-    # obtain the desired and gripper orientations
-    # 取目标与各指的四元数 (N,4) 与 (N,K,4)
-    obj_q = object.data.target_quat_w[..., 0, :]  # (N,4)
-    grip_q_all = gripper.data.target_quat_w  # (N,*,4)
-    finger_q = grip_q_all[..., finger_ids, :]  # (N,K,4)
-    ##############采用点积或者用四元数差值#####
-    eps = 1e-8
-    obj_q = obj_q / (obj_q.norm(dim=-1, keepdim=True) + eps)
-    finger_q = finger_q / (finger_q.norm(dim=-1, keepdim=True) + eps)
-
-    dots = torch.sum(finger_q * obj_q.unsqueeze(-2), dim=-1).abs().clamp(0.0, 1.0)
-    theta2 = 4.0 * (1.0 - dots * dots)
-    sigma2 = std * std
-    per_finger = torch.exp(-theta2 / (2.0 * sigma2))
-    reward = per_finger.mean(dim=-1)  # (N,)
-    return reward
 
 
 def align_ee_object(
@@ -115,9 +88,9 @@ def align_ee_object(
     object_mat = matrix_from_quat(object_quat)
 
     # get current x and y direction of the handle
-    obj_x, obj_y = object_mat[..., 0], object_mat[..., 2]
+    obj_x, obj_y,obj_z = object_mat[..., 0], object_mat[..., 1], object_mat[..., 2]
     # get current x and z direction of the gripper
-    ee_frame_x, ee_frame_y = ee_frame_rot_mat[..., 0], ee_frame_rot_mat[..., 2]
+    ee_frame_x, ee_frame_y,ee_frame_z = ee_frame_rot_mat[..., 0], ee_frame_rot_mat[..., 1], ee_frame_rot_mat[..., 2]
 
     # make sure gripper aligns with the handle
     # in this case, the z direction of the gripper should be close to the -x direction of the handle
@@ -125,7 +98,8 @@ def align_ee_object(
     # dot product of z and x should be large
     align_y = torch.bmm(ee_frame_y.unsqueeze(1), obj_y.unsqueeze(-1)).squeeze(-1).squeeze(-1)
     align_x = torch.bmm(ee_frame_x.unsqueeze(1), obj_x.unsqueeze(-1)).squeeze(-1).squeeze(-1)
-    return 1 * (torch.sign(align_y) * align_y**2 + torch.sign(align_x) * align_x**2)
+    align_z = torch.bmm(ee_frame_z.unsqueeze(1), obj_z.unsqueeze(-1)).squeeze(-1).squeeze(-1)
+    return 1 * (torch.sign(align_y) * align_y**2 + torch.sign(align_x) * align_x**2 + torch.sign(align_z) * align_z**2 + torch.sign(align_z) * align_z**2)
 
 
 ###若夹爪处于正确姿态给予布尔奖励
@@ -134,7 +108,7 @@ def align_gripper_around_object(
         object_frame_cfg: SceneEntityCfg = SceneEntityCfg("object_frame"),
         gripper_frame_cfg: SceneEntityCfg = SceneEntityCfg("gripper_frame"),
         ee_frame_cfg: SceneEntityCfg = SceneEntityCfg("ee_frame"),
-        threshold: float = 0.01,
+        threshold: float = 0.02,
 ) -> torch.Tensor:
     object: FrameTransformer = env.scene[object_frame_cfg.name]
     gripper: FrameTransformer = env.scene[gripper_frame_cfg.name]
@@ -148,7 +122,7 @@ def align_gripper_around_object(
     distance = torch.norm(obj_pos - ee_pos, dim=-1, p=2)
 
     is_graspable = (finger_1_pos[:, 2] > obj_pos[:, 2]) & (finger_3_pos[:, 2] > obj_pos[:, 2]) & (
-                finger_4_pos[:, 2] < obj_pos[:, 2]) & (finger_6_pos[:, 2] < obj_pos[:, 2]) & (distance < threshold)
+                finger_4_pos[:, 2] < obj_pos[:, 2]) & (finger_6_pos[:, 2] < obj_pos[:, 2]) 
     return is_graspable
 
 

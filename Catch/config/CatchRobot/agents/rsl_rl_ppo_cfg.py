@@ -9,14 +9,14 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 @configclass
 class CatchCubePPORunnerCfg(RslRlOnPolicyRunnerCfg):
     # rollout 更长一点
-    num_steps_per_env = 24         # 从 24 -> 64
-    max_iterations = 1500           # 先不改；是否增加看你要的总步数
-    save_interval = 50
+    num_steps_per_env = 48         # 从 24 -> 64
+    max_iterations = 3000          # 先不改；是否增加看你要的总步数
+    save_interval = 100
     experiment_name = "catch_cube"
     empirical_normalization = True  # 开启经验归一化（更稳）
 
     policy = RslRlPpoActorCriticCfg(
-        init_noise_std=1.0,
+        init_noise_std=0.3,
         actor_hidden_dims=[256, 256, 128],   # 稍加宽；若算力紧张可回到 [256,128,64]
         critic_hidden_dims=[256, 256, 128],
         activation="elu",
@@ -35,7 +35,7 @@ class CatchCubePPORunnerCfg(RslRlOnPolicyRunnerCfg):
         # ★关键：折扣与时间尺度（50 Hz，每步 0.02 s）
         # γ=0.98 => 1/(1-0.98)=50 步 ≈ 1.0 s（太短）
         # γ=0.998=> 500 步 ≈ 10 s；γ=0.999=> 1000 步 ≈ 20 s
-        gamma=0.998,                 # 推荐 0.998；若轨迹特别长可试 0.999
+        gamma=0.99,                 # 推荐 0.998；若轨迹特别长可试 0.999
         lam=0.97,                    # 从 0.95 -> 0.97，长回合优势估计更稳
         desired_kl=0.01,             # 自适应 LR 的目标 KL，保持
         max_grad_norm=1.0,
