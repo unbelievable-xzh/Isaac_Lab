@@ -68,7 +68,7 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
 ##
 # MDP settings
 ##
-#===========================================================XXXXXXXXXXXXXXXXXX
+#===========================================================XXXXXXXXXXXXXXXXXXFrame
 @configclass
 class CommandsCfg:
     """Command terms for the MDP."""
@@ -99,12 +99,7 @@ class ObservationsCfg:
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel)
         #目标物体相对于机器人坐标系下先
-        object_pose = ObsTerm(func=mdp.object_position_in_robot_root_frame_pos)
-        object_quat = ObsTerm(func=mdp.object_position_in_robot_root_frame_quat)
-        # #目标物体与末端距离
-        # object_gripper_distance = ObsTerm(func=mdp.object_gripper_distance)
-        #command中的目标位姿
-        # target_object_pos = ObsTerm(func=mdp.generated_commands, params={"command_name": "object_pose"})
+        gripper_object_rel_pose = ObsTerm(func=mdp.object_gripper_relative_pose)
         actions = ObsTerm(func=mdp.last_action)
         def __post_init__(self):
             self.enable_corruption = True
@@ -121,16 +116,16 @@ class RewardsCfg:
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-3e-3)
     joint_vel   = RewTerm(func=mdp.joint_vel_l2,  weight=-3e-3, params={"asset_cfg": SceneEntityCfg("robot")})
     ########末端接近物体##########
-    approach_ee_object = RewTerm(func=mdp.object_ee_distance, weight=2.0,params={"threshold": 0.5 })
+    approach_ee_object = RewTerm(func=mdp.object_ee_distance, weight=2.0,params={"near_radius": 0.3 })
     orientation_correct = RewTerm(func=mdp.align_ee_object, weight=0.5)
     #########抓住物体##########
-    approach_gripper_handle = RewTerm(func=mdp.approach_gripper_object, weight=5.0, params={"offset": MISSING,"threshold": 0.01})
-    align_grasp_around_handle = RewTerm(func=mdp.align_gripper_around_object, weight=0.125,params={"threshold": 0.01})
-    grasp_handle = RewTerm(
+    approach_gripper_handle = RewTerm(func=mdp.approach_gripper_object, weight=5.0, params={"offset": MISSING,"threshold": 0.03})
+    align_grasp_around_handle = RewTerm(func=mdp.align_gripper_around_object, weight=0.125,params={"threshold": 0.03})
+    grasp_object = RewTerm(
         func=mdp.grasp_object,
         weight=0.5,
         params={
-            "threshold": 0.005,
+            "threshold": 0.03,
             "open_joint_pos": MISSING,
             "asset_cfg": SceneEntityCfg("robot", joint_names=MISSING),
         },
