@@ -140,6 +140,7 @@ class CatchCubeEnvCfg(CatchEnvCfg):
             ],
         )
         ########
+                # Set the body name for the end effector
         self.rewards.approach_gripper_handle.params["offset"] = 0.04
         self.rewards.grasp_object.params["open_joint_pos"] = 0.04
         self.rewards.grasp_object.params["asset_cfg"].joint_names = ["PrismaticJoint_1"]

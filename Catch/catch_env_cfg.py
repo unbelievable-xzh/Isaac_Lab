@@ -62,7 +62,7 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
     
     table = AssetBaseCfg(
         prim_path="{ENV_REGEX_NS}/table",
-        spawn=sim_utils.UsdFileCfg(usd_path="/home/xzh/Downloads/AirSimDigitalTwins-/Model/CatchScene/object2_1.usd", scale=(0.01, 0.01, 0.01)),
+        spawn=sim_utils.UsdFileCfg(usd_path="/home/xzh/Downloads/AirSimDigitalTwins-/Model/Catch_scene/object2_1_copy.usd", scale=(0.01, 0.01, 0.01)),
         init_state=AssetBaseCfg.InitialStateCfg(pos=(-2.0, 0.0, 0.0)),
     )
 ##
@@ -78,8 +78,8 @@ class CommandsCfg:
         resampling_time_range=(15, 15),   
         debug_vis=False,
         ranges=mdp.UniformPoseCommandCfg.Ranges(
-            pos_x=(-1.35, -1.35), pos_y=(0.0, 0.0), pos_z=(1.5, 1.5),
-            roll=(-3.14 ,3.14), pitch=(-3.14, 3.14), yaw=(-3.14,3.14)
+            pos_x=(-1.8, -1.7), pos_y=(0.0, 0.0), pos_z=(1.5, 1.6),
+            roll=(0 ,0), pitch=(0, 0), yaw=(0,0)
         ),
     )
 #============================================================√√√√√√√√√√√√√√√√√√√√√√
@@ -99,6 +99,7 @@ class ObservationsCfg:
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel)
         #目标物体相对于机器人坐标系下先
+        target_object_position = ObsTerm(func=mdp.generated_commands, params={"command_name": "object_pose"})
         gripper_object_rel_pose = ObsTerm(func=mdp.object_gripper_relative_pose)
         actions = ObsTerm(func=mdp.last_action)
         def __post_init__(self):
@@ -117,13 +118,13 @@ class RewardsCfg:
     joint_vel   = RewTerm(func=mdp.joint_vel_l2,  weight=-3e-3, params={"asset_cfg": SceneEntityCfg("robot")})
     ########末端接近物体##########
     approach_ee_object = RewTerm(func=mdp.object_ee_distance, weight=2.0,params={"near_radius": 0.3 })
-    orientation_correct = RewTerm(func=mdp.align_ee_object, weight=0.5)
+    orientation_correct = RewTerm(func=mdp.align_ee_object, weight=1.0)
     #########抓住物体##########
-    approach_gripper_handle = RewTerm(func=mdp.approach_gripper_object, weight=5.0, params={"offset": MISSING,"threshold": 0.03})
-    align_grasp_around_handle = RewTerm(func=mdp.align_gripper_around_object, weight=0.125,params={"threshold": 0.03})
+    approach_gripper_handle = RewTerm(func=mdp.approach_gripper_object, weight=5.0, params={"offset": MISSING,"threshold": 0.08})
+    align_grasp_around_handle = RewTerm(func=mdp.align_gripper_around_object, weight=1.25,params={"threshold": 0.03})
     grasp_object = RewTerm(
         func=mdp.grasp_object,
-        weight=0.5,
+        weight=1.0,
         params={
             "threshold": 0.03,
             "open_joint_pos": MISSING,
@@ -133,6 +134,11 @@ class RewardsCfg:
     #掉落惩罚
     object_dropping = RewTerm(func=mdp.object_is_dropped, params={"minimal_height": 1.0}, weight=-10.0)
 
+    object_goal_tracking_fine_grained = RewTerm(
+        func=mdp.object_goal_distance,
+        params={"std": 0.05, "minimal_height": 1.2, "command_name": "object_pose"},
+        weight=5.0,
+    )
 #============================================================√√√√√√√√√√√√√√√√√√√√√√
 @configclass
 class TerminationsCfg:
