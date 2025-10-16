@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-from dataclasses import MISSING
+from dataclasses import MISSING, field
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg, DeformableObjectCfg, RigidObjectCfg
@@ -26,6 +26,7 @@ import isaaclab.sim as sim_utils
 
 
 from . import mdp
+from .hierarchical import HierarchicalPolicyManager, SkillConfig, SkillLibrary
 
 ##
 # Scene definition
@@ -94,18 +95,51 @@ class ActionsCfg:
 @configclass
 class ObservationsCfg:
     @configclass
-    class PolicyCfg(ObsGroup):
-        #机器人关节位置+角速度
+    class HighLevelCfg(ObsGroup):
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel)
-        #目标物体相对于机器人坐标系下先
         target_object_position = ObsTerm(func=mdp.generated_commands, params={"command_name": "object_pose"})
-        gripper_object_rel_pose = ObsTerm(func=mdp.object_gripper_relative_pose)
-        actions = ObsTerm(func=mdp.last_action)
+        ee_position = ObsTerm(func=mdp.ee_pos)
+
         def __post_init__(self):
             self.enable_corruption = True
             self.concatenate_terms = True
-    policy: PolicyCfg = PolicyCfg()
+
+    @configclass
+    class SkillAlignmentCfg(ObsGroup):
+        joint_pos = ObsTerm(func=mdp.joint_pos_rel)
+        joint_vel = ObsTerm(func=mdp.joint_vel_rel)
+        gripper_object_rel_pose = ObsTerm(func=mdp.object_gripper_relative_pose)
+        actions = ObsTerm(func=mdp.last_action)
+
+        def __post_init__(self):
+            self.enable_corruption = True
+            self.concatenate_terms = True
+
+    @configclass
+    class GraspingCfg(ObsGroup):
+        gripper_object_rel_pose = ObsTerm(func=mdp.object_gripper_relative_pose)
+        actions = ObsTerm(func=mdp.last_action)
+
+        def __post_init__(self):
+            self.enable_corruption = True
+            self.concatenate_terms = True
+
+    @configclass
+    class TransportCfg(ObsGroup):
+        joint_pos = ObsTerm(func=mdp.joint_pos_rel)
+        joint_vel = ObsTerm(func=mdp.joint_vel_rel)
+        target_object_position = ObsTerm(func=mdp.generated_commands, params={"command_name": "object_pose"})
+
+        def __post_init__(self):
+            self.enable_corruption = True
+            self.concatenate_terms = True
+
+    high_level: HighLevelCfg = HighLevelCfg()
+    policy: SkillAlignmentCfg = SkillAlignmentCfg()
+    skill_alignment: SkillAlignmentCfg = SkillAlignmentCfg()
+    grasping: GraspingCfg = GraspingCfg()
+    transport: TransportCfg = TransportCfg()
 #============================================================√√√√√√√√√√√√√√√√√√√√√√
 @configclass
 class EventCfg:
@@ -139,6 +173,24 @@ class RewardsCfg:
         params={"std": 0.05, "minimal_height": 1.2, "command_name": "object_pose"},
         weight=5.0,
     )
+
+    # Mapping between skills and the reward terms they primarily optimise.
+    skill_reward_groups = {
+        "approach": (
+            "approach_ee_object",
+            "orientation_correct",
+        ),
+        "adjust": (
+            "approach_gripper_handle",
+            "align_grasp_around_handle",
+        ),
+        "grasp": (
+            "grasp_object",
+        ),
+        "transport": (
+            "object_goal_tracking_fine_grained",
+        ),
+    }
 #============================================================√√√√√√√√√√√√√√√√√√√√√√
 @configclass
 class TerminationsCfg:
@@ -146,6 +198,10 @@ class TerminationsCfg:
 
     # 任务超时终止条件
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
+    skill_terminations = {
+        "grasp": ("object_dropping",),
+        "transport": ("object_dropping",),
+    }
 
 #============================================================√√√√√√√√√√√√√√√√√√√√√√
 @configclass
@@ -179,6 +235,36 @@ class CatchEnvCfg(ManagerBasedRLEnvCfg):
     events: EventCfg = EventCfg()
     curriculum: CurriculumCfg = CurriculumCfg()
 
+    @configclass
+    class HierarchyCfg:
+        """Hierarchical reinforcement learning specific configuration."""
+
+        enabled: bool = True
+        decision_interval: int = 8
+        default_skill: str = "approach"
+        skills: dict[str, SkillConfig] = field(default_factory=dict)
+
+        def ensure_defaults(self) -> None:
+            """Populate default skill definitions if none are provided."""
+
+            base_skills = SkillLibrary.default_catch_skills()
+            if not self.skills:
+                self.skills = base_skills
+            else:
+                self.skills = SkillLibrary.merge_skills(base_skills, self.skills)
+            if self.default_skill not in self.skills:
+                self.default_skill = next(iter(self.skills))
+
+        def create_manager(self) -> HierarchicalPolicyManager:
+            self.ensure_defaults()
+            return HierarchicalPolicyManager(
+                skills=self.skills,
+                default_skill=self.default_skill,
+                decision_interval=self.decision_interval,
+            )
+
+    hierarchy: HierarchyCfg = HierarchyCfg()
+
     def __post_init__(self):
         """Post initialization."""
         # general settings
@@ -193,3 +279,8 @@ class CatchEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.gpu_found_lost_aggregate_pairs_capacity = 1024 * 1024 * 4
         self.sim.physx.gpu_total_aggregate_pairs_capacity = 16 * 1024
         self.sim.physx.friction_correlation_distance = 0.00625
+
+        # Ensure we have a valid hierarchical configuration ready for the
+        # training scripts. The actual manager instance is only constructed in
+        # the learner when required.
+        self.hierarchy.ensure_defaults()
