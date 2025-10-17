@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import gymnasium as gym
 import os
+from pathlib import Path
 
 from . import agents
 
@@ -24,6 +25,25 @@ gym.register(
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
         "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_ppo_cfg.yaml",
         "sb3_cfg_entry_point": f"{agents.__name__}:sb3_ppo_cfg.yaml",
+    },
+    disable_env_checker=True,
+)
+
+gym.register(
+    id="Isaac-Lift-Cube-Franka-Hybrid-v0",
+    entry_point="lift.model_based_lift:create_model_based_hybrid_env",
+    kwargs={
+        "base_env_id": "Isaac-Lift-Cube-Franka-v0",
+        "model_based_cfg": {
+            "dataset_size": 4000,
+            "epochs": 40,
+            "mpc_horizon": 6,
+            "mpc_samples": 320,
+            "initial_blend": 0.6,
+            "min_blend": 0.1,
+            "blend_decay_steps": 500000,
+            "model_path": str(Path.home() / ".cache" / "isaac_lab" / "lift_model_based_teacher.pt"),
+        },
     },
     disable_env_checker=True,
 )
