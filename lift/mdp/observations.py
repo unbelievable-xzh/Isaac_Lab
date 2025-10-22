@@ -67,15 +67,48 @@ def _object_position_in_robot_frame(
 def _get_noise_generator(
     env: "ManagerBasedRLEnv",
     pos_sigma: float,
+    *,
+    bias_sigma: float = 0.0,
+    drift_sigma: float = 0.0,
+    rot_bias_deg: float = 0.0,
+    scale_err: float = 0.0,
+    quant_step: float = 0.0,
+    dropout_p: float = 0.0,
+    delay_steps: int = 0,
+    jitter_range: int = 0,
+    low_fps_hold: int = 1,
 ) -> GaussianPositionNoise:
-    """Fetches (or creates) the cached Gaussian noise generator."""
+    """Fetches (or creates) the cached position noise generator."""
 
     generator: Optional[GaussianPositionNoise] = getattr(env, "_objpos_noise_gen", None)
     if generator is None:
-        generator = GaussianPositionNoise(pos_sigma)
+        generator = GaussianPositionNoise(
+            env,
+            pos_sigma=pos_sigma,
+            bias_sigma=bias_sigma,
+            drift_sigma=drift_sigma,
+            rot_bias_deg=rot_bias_deg,
+            scale_err=scale_err,
+            quant_step=quant_step,
+            dropout_p=dropout_p,
+            delay_steps=delay_steps,
+            jitter_range=jitter_range,
+            low_fps_hold=low_fps_hold,
+        )
         setattr(env, "_objpos_noise_gen", generator)
     else:
-        generator.sigma = pos_sigma
+        generator.update_parameters(
+            pos_sigma=pos_sigma,
+            bias_sigma=bias_sigma,
+            drift_sigma=drift_sigma,
+            rot_bias_deg=rot_bias_deg,
+            scale_err=scale_err,
+            quant_step=quant_step,
+            dropout_p=dropout_p,
+            delay_steps=delay_steps,
+            jitter_range=jitter_range,
+            low_fps_hold=low_fps_hold,
+        )
     return generator
 
 
@@ -142,23 +175,59 @@ def object_position_in_robot_root_frame(
 def object_position_in_robot_root_frame_noisy(
     env: "ManagerBasedRLEnv",
     pos_sigma: float = 0.003,
+    bias_sigma: float = 0.0,
+    drift_sigma: float = 0.0,
+    rot_bias_deg: float = 0.0,
+    scale_err: float = 0.0,
+    quant_step: float = 0.0,
+    dropout_p: float = 0.0,
+    delay_steps: int = 0,
+    jitter_range: int = 0,
+    low_fps_hold: int = 1,
     use_during_evaluation: bool = False,
     robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     object_cfg: SceneEntityCfg = SceneEntityCfg("object"),
 ) -> torch.Tensor:
     """Noisy object position in the robot root frame.
 
-    The helper corrupts the ground-truth measurement using a Gaussian noise
-    generator.  The generated noisy measurement is cached on the environment and
-    subsequently consumed by the Kalman-filtered observation to ensure both
-    observation heads see the exact same measurement sample.
+    The helper corrupts the ground-truth measurement using a configurable noise
+    generator.  In addition to zero-mean Gaussian jitter, the generator can
+    inject per-episode bias, random-walk drift, rotation and scale errors,
+    quantisation, dropouts, delays and low frame-rate behaviour.  The generated
+    noisy measurement is cached on the environment and subsequently consumed by
+    the Kalman-filtered observation to ensure both observation heads see the
+    exact same measurement sample.
     """
 
     clean_pos = _object_position_in_robot_frame(env, robot_cfg, object_cfg)
-    if pos_sigma <= 0 or (_env_is_in_eval_mode(env) and not use_during_evaluation):
+    noise_disabled = (
+        pos_sigma <= 0
+        and bias_sigma <= 0
+        and drift_sigma <= 0
+        and rot_bias_deg == 0
+        and scale_err == 0
+        and quant_step == 0
+        and dropout_p <= 0
+        and delay_steps == 0
+        and jitter_range == 0
+        and low_fps_hold <= 1
+    )
+    if noise_disabled or (_env_is_in_eval_mode(env) and not use_during_evaluation):
         noisy_pos = clean_pos
     else:
-        noise_gen = _get_noise_generator(env, pos_sigma)
+        noise_gen = _get_noise_generator(
+            env,
+            pos_sigma,
+            bias_sigma=bias_sigma,
+            drift_sigma=drift_sigma,
+            rot_bias_deg=rot_bias_deg,
+            scale_err=scale_err,
+            quant_step=quant_step,
+            dropout_p=dropout_p,
+            delay_steps=delay_steps,
+            jitter_range=jitter_range,
+            low_fps_hold=low_fps_hold,
+        )
         noisy_pos = noise_gen(clean_pos)
 
     setattr(env, "_objpos_measurement", noisy_pos)
@@ -168,6 +237,15 @@ def object_position_in_robot_root_frame_noisy(
 def object_position_in_robot_root_frame_kf(
     env: "ManagerBasedRLEnv",
     pos_sigma: float = 0.003,
+    bias_sigma: float = 0.0,
+    drift_sigma: float = 0.0,
+    rot_bias_deg: float = 0.0,
+    scale_err: float = 0.0,
+    quant_step: float = 0.0,
+    dropout_p: float = 0.0,
+    delay_steps: int = 0,
+    jitter_range: int = 0,
+    low_fps_hold: int = 1,
     q_pos: float = 1e-5,
     q_vel: float = 1e-4,
     use_during_evaluation: bool = False,
@@ -179,10 +257,36 @@ def object_position_in_robot_root_frame_kf(
     measurement = getattr(env, "_objpos_measurement", None)
     if measurement is None:
         clean_pos = _object_position_in_robot_frame(env, robot_cfg, object_cfg)
-        if pos_sigma <= 0 or (_env_is_in_eval_mode(env) and not use_during_evaluation):
+        noise_disabled = (
+            pos_sigma <= 0
+            and bias_sigma <= 0
+            and drift_sigma <= 0
+            and rot_bias_deg == 0
+            and scale_err == 0
+            and quant_step == 0
+            and dropout_p <= 0
+            and delay_steps == 0
+            and jitter_range == 0
+            and low_fps_hold <= 1
+        )
+        if noise_disabled or (
+            _env_is_in_eval_mode(env) and not use_during_evaluation
+        ):
             measurement = clean_pos
         else:
-            noise_gen = _get_noise_generator(env, pos_sigma)
+            noise_gen = _get_noise_generator(
+                env,
+                pos_sigma,
+                bias_sigma=bias_sigma,
+                drift_sigma=drift_sigma,
+                rot_bias_deg=rot_bias_deg,
+                scale_err=scale_err,
+                quant_step=quant_step,
+                dropout_p=dropout_p,
+                delay_steps=delay_steps,
+                jitter_range=jitter_range,
+                low_fps_hold=low_fps_hold,
+            )
             measurement = noise_gen(clean_pos)
 
     kf = _get_kalman_filter(env, pos_sigma, q_pos, q_vel)
