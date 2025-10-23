@@ -16,6 +16,7 @@ avoid the complexity of stateful optimisers inside TorchScript.
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
@@ -116,17 +117,24 @@ class DynamicsModel:
             prev_delta = torch.zeros_like(delta)
 
         self.optimizer.zero_grad(set_to_none=True)
-        # Observation computations typically run under ``torch.no_grad`` to avoid
-        # polluting the autodiff graph of the RL algorithm.  Since the ensemble
-        # updates happen inside that phase we must temporarily re-enable gradient
-        # tracking, otherwise the loss would be detached and ``backward()`` would
-        # fail.  Wrapping the optimisation step in ``torch.enable_grad`` keeps the
-        # rest of the observation pipeline free from gradient side-effects.
+        # Observation computations typically run under ``torch.no_grad`` (or even
+        # ``torch.inference_mode``) to avoid polluting the autodiff graph of the RL
+        # algorithm.  Since the ensemble updates happen inside that phase we must
+        # temporarily re-enable gradient tracking, otherwise the loss would be
+        # detached and ``backward()`` would fail.  Wrapping the optimisation step in
+        # ``torch.enable_grad`` keeps the rest of the observation pipeline free from
+        # gradient side-effects.  Additionally, some call-sites enable
+        # ``torch.inference_mode`` globally, in which case ``torch.enable_grad``
+        # alone is insufficient; explicitly disabling inference mode ensures the
+        # autograd engine is active while the optimiser step executes.
         self.module.train()
-        with torch.enable_grad():
-            pred_delta = self.module(prev_state, prev_action, prev_history)
-            loss = F.mse_loss(pred_delta, delta)
-            loss.backward()
+        inference_ctx = getattr(torch.autograd.grad_mode, "inference_mode", None)
+        grad_guard = inference_ctx(False) if inference_ctx is not None else nullcontext()
+        with grad_guard:
+            with torch.enable_grad():
+                pred_delta = self.module(prev_state, prev_action, prev_history)
+                loss = F.mse_loss(pred_delta, delta)
+                loss.backward()
         self.optimizer.step()
 
         with torch.no_grad():
