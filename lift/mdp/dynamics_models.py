@@ -158,7 +158,7 @@ class DynamicsModel:
                 pred_delta = self.module(prev_state, prev_action, prev_history)
                 loss = F.mse_loss(pred_delta, delta)
                 loss.backward()
-        self.optimizer.step()
+            self.optimizer.step()
 
         with torch.no_grad():
             residual = delta - pred_delta
