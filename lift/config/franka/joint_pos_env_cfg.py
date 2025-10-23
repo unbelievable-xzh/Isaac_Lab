@@ -12,7 +12,7 @@ from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
 from isaaclab_tasks.manager_based.manipulation.lift import mdp
-from isaaclab_tasks.manager_based.manipulation.lift.lift_env_cfg import LiftEnvCfg
+from isaaclab_tasks.manager_based.manipulation.lift.lift_env_cfg import LiftEnvCfg, PlanCObservationsCfg
 
 ##
 # Pre-defined configs
@@ -79,6 +79,11 @@ class FrankaCubeLiftEnvCfg(LiftEnvCfg):
                 ),
             ],
         )
+
+
+@configclass
+class FrankaCubeLiftEnvCfgPlanC(FrankaCubeLiftEnvCfg):
+    observations: PlanCObservationsCfg = PlanCObservationsCfg()
 
 
 @configclass
