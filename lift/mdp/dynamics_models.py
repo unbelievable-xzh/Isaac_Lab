@@ -16,8 +16,10 @@ avoid the complexity of stateful optimisers inside TorchScript.
 
 from __future__ import annotations
 
+from collections import deque
 from contextlib import nullcontext
 from dataclasses import dataclass
+from threading import Event, Lock, Thread
 from typing import List, Optional, Tuple
 
 import torch
@@ -74,7 +76,7 @@ class _ErrorStats:
         return cls(pos_sigma_sq=zero.clone(), q_pos=zero.clone(), q_vel=zero.clone())
 
     def update(self, delta: Tensor, prev_delta: Tensor, residual: Tensor, momentum: float) -> None:
-        avg = (1.0 - momentum)
+        avg = 1.0 - momentum
         self.pos_sigma_sq = avg * self.pos_sigma_sq + momentum * residual.pow(2).mean(dim=0, keepdim=True)
         self.q_pos = avg * self.q_pos + momentum * delta.pow(2).mean(dim=0, keepdim=True)
         self.q_vel = avg * self.q_vel + momentum * (delta - prev_delta).pow(2).mean(dim=0, keepdim=True)
@@ -278,3 +280,168 @@ def create_ensemble(
         learning_rate=learning_rate,
         momentum=momentum,
     )
+
+
+class PlanCTransitionDataset:
+    """Thread-safe queue that buffers transitions for the dynamics ensemble."""
+
+    def __init__(self, capacity: int = 512) -> None:
+        self._buffer: deque[tuple[Tensor, Tensor, Tensor, Tensor]] = deque(maxlen=capacity)
+        self._lock = Lock()
+        self._has_data = Event()
+
+    def __len__(self) -> int:  # pragma: no cover - trivial
+        with self._lock:
+            return len(self._buffer)
+
+    def push(self, prev_state: Tensor, action: Tensor, history: Tensor, next_state: Tensor) -> None:
+        transition = (
+            prev_state.detach().to(device="cpu"),
+            action.detach().to(device="cpu"),
+            history.detach().to(device="cpu"),
+            next_state.detach().to(device="cpu"),
+        )
+        with self._lock:
+            self._buffer.append(transition)
+            self._has_data.set()
+
+    def pop_many(self, max_items: int) -> List[tuple[Tensor, Tensor, Tensor, Tensor]]:
+        with self._lock:
+            if not self._buffer:
+                self._has_data.clear()
+                return []
+            count = min(max_items, len(self._buffer))
+            items = [self._buffer.popleft() for _ in range(count)]
+            if not self._buffer:
+                self._has_data.clear()
+            return items
+
+    def wait_for_data(self, timeout: Optional[float] = None) -> bool:
+        return self._has_data.wait(timeout)
+
+    def notify_all(self) -> None:
+        self._has_data.set()
+
+
+def get_plan_c_dataset(env) -> PlanCTransitionDataset:
+    """Returns the cached transition dataset attached to the environment."""
+
+    dataset: Optional[PlanCTransitionDataset] = getattr(env, "_plan_c_dataset", None)
+    if dataset is None:
+        dataset = PlanCTransitionDataset()
+        setattr(env, "_plan_c_dataset", dataset)
+    return dataset
+
+
+def _locate_plan_c_env(root) -> object:
+    """Best-effort lookup of the environment hosting the plan-C buffers."""
+
+    visited: set[int] = set()
+    stack: List[object] = [root]
+    while stack:
+        current = stack.pop()
+        obj_id = id(current)
+        if obj_id in visited:
+            continue
+        visited.add(obj_id)
+
+        if hasattr(current, "_plan_c_dataset") or hasattr(current, "_plan_c_state_history"):
+            return current
+
+        for attr_name in ("env", "_env", "unwrapped", "vec_env", "_vec_env", "envs"):
+            if not hasattr(current, attr_name):
+                continue
+            candidate = getattr(current, attr_name)
+            if isinstance(candidate, (list, tuple)):
+                stack.extend(candidate)
+            elif candidate is not None:
+                stack.append(candidate)
+
+    return root
+
+
+class PlanCDynamicsAsyncTrainer:
+    """Background worker that performs deferred dynamics updates."""
+
+    def __init__(
+        self,
+        env,
+        *,
+        device: Optional[torch.device | str] = None,
+        max_updates_per_cycle: int = 4,
+        poll_interval: float = 0.05,
+    ) -> None:
+        self._root_env = env
+        self._base_env = _locate_plan_c_env(env)
+        self._device = torch.device(device) if device is not None else getattr(self._base_env, "device", torch.device("cpu"))
+        self._max_updates = max(1, int(max_updates_per_cycle))
+        self._poll_interval = max(0.0, float(poll_interval))
+        self._stop_event = Event()
+        self._thread: Optional[Thread] = None
+        self._last_error: Optional[BaseException] = None
+
+        # ensure dataset exists so that the worker can block on it immediately
+        get_plan_c_dataset(self._base_env)
+
+    def start(self) -> None:
+        if self._thread is not None:
+            return
+
+        self._stop_event.clear()
+        self._thread = Thread(target=self._worker_loop, name="plan_c_dynamics_trainer", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        if self._thread is None:
+            return
+
+        self._stop_event.set()
+        get_plan_c_dataset(self._base_env).notify_all()
+        self._thread.join()
+        self._thread = None
+
+        if self._last_error is not None:
+            error = self._last_error
+            self._last_error = None
+            raise error
+
+    def update_now(self, max_updates: Optional[int] = None) -> int:
+        """Runs a bounded number of optimisation steps on the calling thread."""
+
+        if max_updates is None:
+            max_updates = self._max_updates
+
+        dataset = get_plan_c_dataset(self._base_env)
+        transitions = dataset.pop_many(max_updates)
+        if not transitions:
+            return 0
+
+        ensemble: Optional[DynamicsEnsemble] = getattr(self._base_env, "_plan_c_dynamics", None)
+        if ensemble is None:
+            # If the observation group never created the ensemble we simply drop the data.
+            return 0
+
+        updates = 0
+        for prev_state, action, history, next_state in transitions:
+            prev_state = prev_state.to(self._device)
+            action = action.to(self._device)
+            history = history.to(self._device)
+            next_state = next_state.to(self._device)
+            ensemble.update(prev_state, action, history, next_state)
+            updates += 1
+        return updates
+
+    def _worker_loop(self) -> None:
+        dataset = get_plan_c_dataset(self._base_env)
+        try:
+            while not self._stop_event.is_set():
+                if not dataset.wait_for_data(timeout=self._poll_interval):
+                    continue
+                if self.update_now(self._max_updates) == 0:
+                    # No work was performed. Loop again after waiting for new data.
+                    continue
+        except BaseException as exc:  # noqa: BLE001
+            self._last_error = exc
+            self._stop_event.set()
+            dataset.notify_all()
+
