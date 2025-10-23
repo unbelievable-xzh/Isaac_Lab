@@ -85,7 +85,7 @@ class BatchPosVelKalmanFilter:
 
         measurement = measurement.to(self.device)
         x_pred = torch.matmul(self.x, self.A_T)
-        P_pred = torch.matmul(torch.matmul(self.P, self.A_T), self.A) + self.Q.unsqueeze(0)
+        P_pred = self.A @ self.P @ self.A_T + self.Q.unsqueeze(0)
 
         innovation = measurement - torch.matmul(self.H, x_pred.transpose(0, 1)).transpose(0, 1)
         S = torch.matmul(torch.matmul(self.H, P_pred), self.H_T) + self.R.unsqueeze(0)
@@ -93,10 +93,12 @@ class BatchPosVelKalmanFilter:
         K = torch.matmul(torch.matmul(P_pred, self.H_T), S_inv)
 
         x_new = x_pred + torch.matmul(K, innovation.unsqueeze(-1)).squeeze(-1)
-        KH = torch.matmul(K, self.H)
-        P_new = torch.matmul(self._I6 - KH, P_pred)
+        
+        KH   = torch.matmul(K, self.H)
+        I_KH = self._I6 - KH
+        P_new = I_KH @ P_pred @ I_KH.transpose(-1, -2) + K @ self.R @ K.transpose(-1, -2)
+        P_new = 0.5 * (P_new + P_new.transpose(-1, -2))
 
         self.x = x_new
         self.P = P_new
         return x_new[:, :3]
-

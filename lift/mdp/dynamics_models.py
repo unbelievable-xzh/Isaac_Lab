@@ -116,9 +116,17 @@ class DynamicsModel:
             prev_delta = torch.zeros_like(delta)
 
         self.optimizer.zero_grad(set_to_none=True)
-        pred_delta = self.module(prev_state, prev_action, prev_history)
-        loss = F.mse_loss(pred_delta, delta)
-        loss.backward()
+        # Observation computations typically run under ``torch.no_grad`` to avoid
+        # polluting the autodiff graph of the RL algorithm.  Since the ensemble
+        # updates happen inside that phase we must temporarily re-enable gradient
+        # tracking, otherwise the loss would be detached and ``backward()`` would
+        # fail.  Wrapping the optimisation step in ``torch.enable_grad`` keeps the
+        # rest of the observation pipeline free from gradient side-effects.
+        self.module.train()
+        with torch.enable_grad():
+            pred_delta = self.module(prev_state, prev_action, prev_history)
+            loss = F.mse_loss(pred_delta, delta)
+            loss.backward()
         self.optimizer.step()
 
         with torch.no_grad():

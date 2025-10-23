@@ -14,8 +14,8 @@ from isaaclab_rl.rsl_rl import (
 class LiftCubePPORunnerCfg(RslRlOnPolicyRunnerCfg):
     # RNN 建议更长的序列步长，便于捕捉时序
     num_steps_per_env = 24              # ← 原来 24，建议 48~128 之间
-    max_iterations = 1000
-    save_interval = 50
+    max_iterations = 2000
+    save_interval = 200
     experiment_name = "franka_lift_lstm"
     empirical_normalization = True      # RNN 更建议开启归一化
 

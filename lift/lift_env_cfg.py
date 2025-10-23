@@ -105,7 +105,19 @@ class ObservationsCfg:
         #无噪声观测
         # object_position = ObsTerm(func=mdp.object_position_in_robot_root_frame)  
         #有噪声观测
-        object_position = ObsTerm(func=mdp.object_position_in_robot_root_frame_noisy)
+        object_position = ObsTerm(func=mdp.object_position_in_robot_root_frame_noisy,params={
+        "pos_sigma": 0.03,
+        "bias_sigma": 0.015,
+        "drift_sigma": 0.0,
+        "rot_bias_deg": 0.0,
+        "scale_err": 0.0,
+        "quant_step": 0.0,
+        "dropout_p": 0.0,
+        "delay_steps": 0,
+        "jitter_range": 0,
+        "low_fps_hold": 1,
+    },
+)
         target_object_position = ObsTerm(func=mdp.generated_commands, params={"command_name": "object_pose"})
         actions = ObsTerm(func=mdp.last_action)
 
@@ -116,8 +128,36 @@ class ObservationsCfg:
     class CriticCfg(ObsGroup):
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel)
-        # Critic 用：无噪真值
-        object_position = ObsTerm(func=mdp.object_position_in_robot_root_frame)
+#         #对称带噪观测做对比
+#         object_position = ObsTerm(func=mdp.object_position_in_robot_root_frame_noisy,params={
+#         "pos_sigma": 0.03,
+#         "bias_sigma": 0.015,
+#         "drift_sigma": 0.0,
+#         "rot_bias_deg": 0.0,
+#         "scale_err": 0.0,
+#         "quant_step": 0.0,
+#         "dropout_p": 0.0,
+#         "delay_steps": 0,
+#         "jitter_range": 0,
+#         "low_fps_hold": 1,
+#     },
+# )
+        # Critic 用：KF
+        object_position = ObsTerm(func=mdp.object_position_in_robot_root_frame_kf,params={
+        "pos_sigma": 0.03,
+        "bias_sigma": 0.015,
+        "drift_sigma": 0.0,
+        "rot_bias_deg": 0.0,
+        "scale_err": 0.0,
+        "quant_step": 0.0,
+        "dropout_p": 0.0,
+        "delay_steps": 0,
+        "jitter_range": 0,
+        "low_fps_hold": 1,
+    },
+)
+        # #真值Critic
+        # object_position = ObsTerm(func=mdp.object_position_in_robot_root_frame)
         target_object_position = ObsTerm(func=mdp.generated_commands, params={"command_name": "object_pose"})
         actions = ObsTerm(func=mdp.last_action)
         def __post_init__(self):
@@ -126,8 +166,6 @@ class ObservationsCfg:
     # observation groups
     policy: PolicyCfg = PolicyCfg()
     critic: CriticCfg = CriticCfg()
-
-
 @configclass
 class PlanCObservationsCfg(ObservationsCfg):
     """Extended observation set with model-based rollouts for plan C."""
@@ -208,11 +246,11 @@ class RewardsCfg:
     )
 
     # action penalty
-    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-4)
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-1)
 
     joint_vel = RewTerm(
         func=mdp.joint_vel_l2,
-        weight=-1e-4,
+        weight=-1e-1,
         params={"asset_cfg": SceneEntityCfg("robot")},
     )
 
@@ -232,13 +270,13 @@ class TerminationsCfg:
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
-    action_rate = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -1e-1, "num_steps": 10000}
-    )
+    # action_rate = CurrTerm(
+    #     func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -1e-1, "num_steps": 10000}
+    # )
 
-    joint_vel = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -1e-1, "num_steps": 10000}
-    )
+    # joint_vel = CurrTerm(
+    #     func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -1e-1, "num_steps": 10000}
+    # )
 
 
 ##
@@ -276,8 +314,6 @@ class LiftEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.gpu_found_lost_aggregate_pairs_capacity = 1024 * 1024 * 4
         self.sim.physx.gpu_total_aggregate_pairs_capacity = 16 * 1024
         self.sim.physx.friction_correlation_distance = 0.00625
-
-
 @configclass
 class LiftEnvPlanCCfg(LiftEnvCfg):
     """Lift environment variant that exposes plan-C observations."""
