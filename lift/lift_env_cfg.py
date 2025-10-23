@@ -179,6 +179,7 @@ class PlanCObservationsCfg(ObservationsCfg):
                 "history_len": 4,
                 "ensemble_size": 5,
                 "soft_update": 0.15,
+                "log_transition": True,
             },
         )
 
@@ -196,6 +197,7 @@ class PlanCObservationsCfg(ObservationsCfg):
                 "history_len": 4,
                 "ensemble_size": 5,
                 "soft_update": 0.15,
+                "log_transition": False,
             },
         )
 

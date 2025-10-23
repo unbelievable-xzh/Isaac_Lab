@@ -28,7 +28,7 @@ from isaaclab.utils.math import subtract_frame_transforms
 
 from .kalman_filters import BatchPosVelKalmanFilter
 from .noise_generators import GaussianPositionNoise
-from .dynamics_models import DynamicsEnsemble, create_ensemble
+from .dynamics_models import DynamicsEnsemble, create_ensemble, get_plan_c_dataset
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -385,6 +385,7 @@ def model_rollout_features(
     learning_rate: float = 5e-3,
     momentum: float = 0.05,
     soft_update: float = 0.1,
+    log_transition: bool = True,
     robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     object_cfg: SceneEntityCfg = SceneEntityCfg("object"),
 ) -> torch.Tensor:
@@ -397,7 +398,11 @@ def model_rollout_features(
     prev_state: Optional[torch.Tensor] = getattr(env, "_plan_c_prev_state", None)
     prev_history = history.clone()
 
+    dataset = get_plan_c_dataset(env)
+
     if prev_state is not None:
+        if log_transition:
+            dataset.push(prev_state, action, prev_history, current_state)
         ensemble = _get_dynamics_ensemble(
             env,
             state_dim=state_dim,
@@ -408,7 +413,6 @@ def model_rollout_features(
             learning_rate=learning_rate,
             momentum=momentum,
         )
-        ensemble.update(prev_state, action, prev_history, current_state)
         rollout_states, rollout_actions = ensemble.rollout(
             current_state, action, history, horizon=horizon, soft_update=soft_update
         )
