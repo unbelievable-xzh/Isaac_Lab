@@ -92,6 +92,8 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
+from lift.mdp.dynamics_models import PlanCDynamicsAsyncTrainer
+
 # PLACEHOLDER: Extension template (do not remove this comment)
 
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -179,8 +181,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     dump_pickle(os.path.join(log_dir, "params", "env.pkl"), env_cfg)
     dump_pickle(os.path.join(log_dir, "params", "agent.pkl"), agent_cfg)
 
-    # run training
-    runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
+    # start the asynchronous dynamics trainer if plan-C features are enabled
+    dynamics_trainer = PlanCDynamicsAsyncTrainer(env, device=agent_cfg.device)
+    dynamics_trainer.start()
+
+    try:
+        # run training
+        runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
+    finally:
+        dynamics_trainer.stop()
 
     # close the simulator
     env.close()
