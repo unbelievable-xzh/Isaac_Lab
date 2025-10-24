@@ -167,48 +167,6 @@ class ObservationsCfg:
     policy: PolicyCfg = PolicyCfg()
     critic: CriticCfg = CriticCfg()
 @configclass
-class PlanCObservationsCfg(ObservationsCfg):
-    """Extended observation set with model-based rollouts for plan C."""
-
-    @configclass
-    class PolicyCfg(ObservationsCfg.PolicyCfg):
-        model_rollout = ObsTerm(
-            func=mdp.model_rollout_features,
-            params={
-                "horizon": 5,
-                "history_len": 4,
-                "ensemble_size": 5,
-                "soft_update": 0.15,
-            },
-        )
-
-        def __post_init__(self):
-            super().__post_init__()
-            self.concatenate_terms = True
-
-    @configclass
-    class CriticCfg(ObservationsCfg.CriticCfg):
-        object_position = ObsTerm(func=mdp.object_position_in_robot_root_frame_kf)
-        model_rollout = ObsTerm(
-            func=mdp.model_rollout_features,
-            params={
-                "horizon": 5,
-                "history_len": 4,
-                "ensemble_size": 5,
-                "soft_update": 0.15,
-            },
-        )
-
-        def __post_init__(self):
-            super().__post_init__()
-            self.enable_corruption = False
-            self.concatenate_terms = True
-
-    policy: PolicyCfg = PolicyCfg()
-    critic: CriticCfg = CriticCfg()
-
-
-@configclass
 class EventCfg:
     """Configuration for events."""
 
@@ -314,8 +272,3 @@ class LiftEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.gpu_found_lost_aggregate_pairs_capacity = 1024 * 1024 * 4
         self.sim.physx.gpu_total_aggregate_pairs_capacity = 16 * 1024
         self.sim.physx.friction_correlation_distance = 0.00625
-@configclass
-class LiftEnvPlanCCfg(LiftEnvCfg):
-    """Lift environment variant that exposes plan-C observations."""
-
-    observations: PlanCObservationsCfg = PlanCObservationsCfg()
